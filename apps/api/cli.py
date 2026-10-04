@@ -35,7 +35,8 @@ from rich.style import Style
 
 # Backend imports
 from app.db.base import Base
-from app.db.session import SessionLocal, engine
+from app.db.session import SessionLocal, engine, ensure_local_schema
+from app.core.config import settings
 from app.models.investigation import Investigation
 from app.models.email_artifact import (
     EmailArtifact,
@@ -54,6 +55,7 @@ from app.services.ai_investigation import run_investigation_ai
 
 # Initialize database schema if not present
 Base.metadata.create_all(bind=engine)
+ensure_local_schema()
 storage = LocalArtifactStorage()
 
 # -----------------------------------------------------------------------------
@@ -203,6 +205,7 @@ def save_config(config: Dict[str, Any]) -> None:
 
 # Active runtime configuration
 ACTIVE_CONFIG = load_config()
+ACTIVE_CONFIG.setdefault("_no_banner", False)
 
 
 def get_theme() -> Dict[str, str]:
@@ -295,6 +298,89 @@ def score_gauge(score: float, width: int = 24) -> Text:
     txt.append(bar, style=f"bold {color}")
     txt.append(f" {score:.0f}/100", style=f"bold {t['text']}")
     return txt
+
+
+def _terminal_width() -> int:
+    return max(72, min(console.width, 132))
+
+
+def show_status_dashboard(animate: bool = False) -> None:
+    """Render a compact SOC-style command dashboard."""
+    t = get_theme()
+    db = SessionLocal()
+    try:
+        if animate and console.is_terminal and ACTIVE_CONFIG.get("show_animations", True):
+            with Progress(
+                SpinnerColumn(style=t["primary"]),
+                TextColumn(f"[{t['text']}]{{task.description}}"),
+                transient=True,
+                console=console,
+            ) as progress:
+                task = progress.add_task("Waking forensic command center…", total=None)
+                time.sleep(0.18)
+                progress.update(task, description="Reading investigation index…")
+                time.sleep(0.18)
+                progress.update(task, description="Loading threat telemetry…")
+                time.sleep(0.18)
+
+        rows = db.query(Investigation).all()
+        counts = {"MALICIOUS": 0, "PHISHING": 0, "SUSPICIOUS": 0, "BENIGN": 0, "OTHER": 0}
+        for row in rows:
+            key = (row.verdict or "OTHER").upper()
+            counts[key if key in counts else "OTHER"] += 1
+
+        total = len(rows)
+        at_risk = counts["MALICIOUS"] + counts["PHISHING"] + counts["SUSPICIOUS"]
+        latest = max(rows, key=lambda row: row.created_at or datetime.min.replace(tzinfo=timezone.utc)) if rows else None
+
+        console.print()
+        if not ACTIVE_CONFIG.get("_no_banner"):
+            console.print(get_banner())
+        summary = Table.grid(expand=True, padding=(0, 2))
+        summary.add_column(justify="center")
+        summary.add_column(justify="center")
+        summary.add_column(justify="center")
+        summary.add_column(justify="center")
+        summary.add_row(
+            f"[bold {t['primary']}] {total} [/]\n[{t['muted']}]INVESTIGATIONS[/]",
+            f"[bold {t['danger']}] {at_risk} [/]\n[{t['muted']}]ACTIVE RISK[/]",
+            f"[bold {t['success']}] {counts['BENIGN']} [/]\n[{t['muted']}]BENIGN[/]",
+            f"[bold {t['accent']}] {len(THEMES)} [/]\n[{t['muted']}]VISUAL THEMES[/]",
+        )
+        console.print(Panel(summary, title=f"[{t['primary']} bold]SENTINEL COMMAND CENTER[/]", border_style=t["primary"], box=get_box()))
+
+        verdicts = Table(box=get_box(), expand=True, title=f"[{t['secondary']} bold]THREAT POSTURE[/]")
+        verdicts.add_column("Verdict")
+        verdicts.add_column("Count", justify="right")
+        verdicts.add_column("Signal", justify="left")
+        for verdict, color, signal in (
+            ("MALICIOUS", t["danger"], "Immediate containment"),
+            ("PHISHING", t["danger"], "Credential or brand lure"),
+            ("SUSPICIOUS", t["warning"], "Analyst review"),
+            ("BENIGN", t["success"], "No significant signal"),
+        ):
+            verdicts.add_row(verdict_badge(verdict), f"[bold {color}]{counts[verdict]}[/]", f"[{t['muted']}]{signal}[/]")
+        console.print(verdicts)
+
+        latest_text = "No investigations yet — drop an .eml file to begin."
+        if latest:
+            latest_text = (
+                f"[bold {t['accent']}]{latest.external_id}[/]  "
+                f"{verdict_badge(latest.verdict)}  "
+                f"{latest.subject or '(no subject)'}"
+            )
+        quick = (
+            f"[bold {t['primary']}]Quick actions[/]\n"
+            f"  [{t['accent']}]analyze[/] <file.eml>   [{t['muted']}]inspect a message[/]\n"
+            f"  [{t['accent']}]list[/]                [{t['muted']}]browse investigations[/]\n"
+            f"  [{t['accent']}]watch[/] <folder>      [{t['muted']}]monitor a drop folder[/]\n"
+            f"  [{t['accent']}]interactive[/]         [{t['muted']}]open command center shell[/]\n\n"
+            f"[bold {t['primary']}]Latest signal[/]\n  {latest_text}"
+        )
+        console.print(Panel(quick, border_style=t["secondary"], box=get_box(), width=_terminal_width()))
+        console.print(f"[{t['muted']}]Theme: {ACTIVE_CONFIG.get('theme', 'cyberpunk')}  •  Database: {settings.DATABASE_URL.split('://', 1)[0]}  •  Press 'interactive' for guided mode[/]\n")
+    finally:
+        db.close()
 
 
 # -----------------------------------------------------------------------------
@@ -1278,7 +1364,8 @@ def _fetch_and_analyze(conn: imaplib.IMAP4_SSL, uid: bytes, t: Dict[str, str]) -
 def run_interactive_mode():
     """High-tech interactive terminal shell."""
     console.clear()
-    console.print(get_banner())
+    if not ACTIVE_CONFIG.get("_no_banner"):
+        console.print(get_banner())
 
     t = get_theme()
     console.print(f"[{t['text']} bold]Type [{t['primary']}]help[/] for command reference or [{t['primary']}]samples[/] to analyze test emails.[/{t['text']} bold]\n")
@@ -1310,6 +1397,7 @@ def run_interactive_mode():
             t_help.add_row("inbox [provider]",           "Connect to live inbox (gmail/outlook/yahoo…) and analyze emails")
             t_help.add_row("brain [status|train]",       "🧠 AI Brain: show ML status / accuracy / retrain model")
             t_help.add_row("list [limit] [verdict]",     "List historical investigations in formatted database table")
+            t_help.add_row("status [--animate]",         "Open the SOC command dashboard")
             t_help.add_row("view <id_or_ext>",           "Open full forensic dashboard for an investigation")
             t_help.add_row("themes",                     "Show visual theme gallery with color palettes")
             t_help.add_row("theme <name>",               "Quick-switch active theme (e.g. theme matrix, theme dracula)")
@@ -1321,7 +1409,8 @@ def run_interactive_mode():
             console.print(t_help)
         elif cmd == "clear":
             console.clear()
-            console.print(get_banner())
+            if not ACTIVE_CONFIG.get("_no_banner"):
+                console.print(get_banner())
         elif cmd == "themes":
             show_themes_showcase()
         elif cmd == "theme":
@@ -1379,6 +1468,8 @@ def run_interactive_mode():
             limit = int(args[0]) if args and args[0].isdigit() else 20
             verdict = args[1] if len(args) > 1 else None
             list_investigations(limit=limit, verdict=verdict)
+        elif cmd in ("status", "dashboard"):
+            show_status_dashboard(animate="--animate" in args)
         elif cmd == "view":
             if not args:
                 console.print(f"[{t['danger']} bold]Error:[/] Please specify an investigation ID (e.g. view INV-38907AE8)")
@@ -1632,6 +1723,11 @@ def main():
     list_parser.add_argument("-s", "--status", help="Filter by status (completed, pending)")
     _add_ui_args(list_parser)
 
+    # status command
+    status_parser = subparsers.add_parser("status", aliases=["dashboard"], help="Open the terminal SOC command dashboard")
+    status_parser.add_argument("--animate", action="store_true", help="Play the startup telemetry animation")
+    _add_ui_args(status_parser)
+
     # view command
     view_parser = subparsers.add_parser("view", help="View full forensic details of an investigation")
     view_parser.add_argument("id", help="Investigation ID or External ID (e.g. INV-38907AE8)")
@@ -1704,6 +1800,8 @@ def main():
         ACTIVE_CONFIG["theme"] = args.theme
     if args.border:
         ACTIVE_CONFIG["box_style"] = args.border
+    if args.no_banner:
+        ACTIVE_CONFIG["_no_banner"] = True
 
     if not args.command or args.command == "interactive":
         run_interactive_mode()
@@ -1731,6 +1829,8 @@ def main():
             sys.exit(1)
     elif args.command == "list":
         list_investigations(limit=args.limit, verdict=args.verdict, status=args.status)
+    elif args.command in ("status", "dashboard"):
+        show_status_dashboard(animate=args.animate)
     elif args.command == "view":
         print_investigation_report(args.id, json_output=args.json, export_path=args.export)
     elif args.command == "inbox":

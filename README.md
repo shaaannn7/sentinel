@@ -8,7 +8,6 @@
   <a href="https://github.com/shaaannn7/sentinel"><img src="https://img.shields.io/github/stars/shaaannn7/sentinel?style=flat-square&logo=github&label=Stars" alt="GitHub stars"></a>
   <a href="https://github.com/shaaannn7/sentinel/issues"><img src="https://img.shields.io/github/issues/shaaannn7/sentinel?style=flat-square&logo=github" alt="Open issues"></a>
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/Next.js-14-000000?style=flat-square&logo=next.js" alt="Next.js 14">
   <img src="https://img.shields.io/badge/FastAPI-0.135-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker ready">
 </p>
@@ -59,67 +58,75 @@ triage without treating an opaque model prediction as a security decision.
 | **AI-assisted reasoning** | Structured header, URL, content, and correlation analysis with schema-validated evidence references |
 | **Investigation graph** | Interactive relationships between senders, infrastructure, URLs, and extracted indicators |
 | **Forensic timeline** | Reconstructed delivery hops plus analysis events |
-| **Analyst interfaces** | Next.js web UI and a terminal CLI backed by the same API and investigation engine |
+| **Terminal command center** | Rich dashboards, themes, live progress, JSON output, inbox workflows, and folder watching |
 | **Demo mode** | Explore the platform locally without external API keys |
 
 ## Quick start
 
-### Option 1: Docker Compose (recommended)
+### Option 1: Terminal command center (recommended)
 
-**Prerequisites:** Docker 24+ and Docker Compose 2+.
+**Prerequisites:** Python 3.11+ and the dependencies in
+`apps/api/requirements.txt`.
 
 ```bash
 git clone https://github.com/shaaannn7/sentinel.git
 cd sentinel
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r apps/api/requirements.txt
+./sentinel status --animate
+```
+
+Run an investigation:
+
+```bash
+./sentinel analyze path/to/message.eml --ai
+./sentinel view INV-XXXXXXXX
+```
+
+For the guided command shell:
+
+```bash
+./sentinel interactive
+```
+
+### Option 2: Docker Compose backend
+
+Use Docker when you want PostgreSQL, Redis, and the FastAPI service instead of
+the default local SQLite store. The released user experience remains the
+terminal CLI.
+
+```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-Open these URLs after the services become healthy:
-
-| Service | URL |
-| --- | --- |
-| SENTINEL web app | [http://localhost:3000](http://localhost:3000) |
-| FastAPI service | [http://localhost:8000](http://localhost:8000) |
-| Interactive API docs | [http://localhost:8000/docs](http://localhost:8000/docs) |
-| OpenAPI schema | [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json) |
-
-Then choose **New Investigation**, upload an authorized `.eml` file, and open
-the resulting investigation to inspect its score, evidence, graph, timeline,
-and report.
-
-Stop the stack with:
+The API and OpenAPI docs are available at
+[http://localhost:8000](http://localhost:8000) and
+[http://localhost:8000/docs](http://localhost:8000/docs). Stop the stack with:
 
 ```bash
 docker compose down
 # Add -v when you intentionally want to remove PostgreSQL and upload volumes.
 ```
 
-### Option 2: Local GUI launcher
-
-The repository includes a small launcher that starts the API and web UI using
-the same local investigation engine:
+Running the launcher without a command opens the interactive terminal shell:
 
 ```bash
-./sentinel gui
+./sentinel
 ```
 
-The launcher uses `127.0.0.1:8000` for the API and `127.0.0.1:3000` for the
-web app. Stop it with `Ctrl+C`.
-
-### Option 3: Terminal CLI
+The same commands are available through the explicit `cli` alias:
 
 ```bash
-./sentinel cli --help
+./sentinel cli status
 ./sentinel cli analyze path/to/message.eml
-./sentinel cli list
 ```
 
-The shorter legacy form remains available:
-
-```bash
-./sentinel analyze path/to/message.eml
-```
+SENTINEL is released as a terminal-first tool. The Rich command center provides
+themes, animated progress, threat posture dashboards, forensic reports, JSON
+output, inbox workflows, folder watching, and model status without requiring a
+browser.
 
 ## How it works
 
@@ -135,7 +142,7 @@ flowchart LR
     F --> I[Timeline, graph, report]
     G --> I
     H --> I
-    I --> J[Web UI or CLI]
+    I --> J[Terminal command center]
 ```
 
 The core request path is:
@@ -147,7 +154,7 @@ The core request path is:
 4. Persist the investigation and evidence in the configured database.
 5. Optionally enrich the result with threat intelligence and schema-validated AI
    reasoning.
-6. Present an explainable result through the web interface, CLI, and API.
+6. Present an explainable result through the terminal command center and API.
 
 AI is an explicit enrichment step. If no provider key is configured, SENTINEL
 returns deterministic results and records AI enrichment as unavailable instead
@@ -155,9 +162,9 @@ of inventing a verdict.
 
 ## Architecture
 
-SENTINEL is a modular monolith with a Next.js analyst interface and a FastAPI
-service. PostgreSQL is the durable source of truth; Redis is available for
-service health and future queue/worker workflows.
+SENTINEL is released as a terminal-first security tool with a FastAPI service
+behind the scenes. PostgreSQL is the durable source of truth; Redis is available
+for service health and future queue/worker workflows.
 
 ```text
 sentinel/
@@ -169,12 +176,12 @@ sentinel/
 │   │   ├── app/models/         # SQLAlchemy persistence models
 │   │   └── app/tests/          # Backend tests and email fixtures
 │   ├── desktop/                # Optional Electron launcher configuration
-│   └── web/                    # Next.js 14 analyst UI
+│   └── web/                    # Optional internal web assets
 ├── packages/                   # Shared types and UI building blocks
 ├── infrastructure/k8s/         # Helm chart for Kubernetes deployment
 ├── docs/                       # API, architecture, deployment, and security docs
-├── docker-compose.yml          # Local API, web, PostgreSQL, and Redis stack
-└── sentinel                    # GUI and CLI launcher
+├── docker-compose.yml          # Local API, PostgreSQL, and Redis stack
+└── sentinel                    # Terminal launcher
 ```
 
 For deeper design details, see:
@@ -231,7 +238,7 @@ Run the API directly from the repository root:
 PYTHONPATH=apps/api python -m uvicorn app.main:app --reload --port 8000
 ```
 
-### Frontend
+### Optional web-package checks
 
 In a second terminal:
 
@@ -241,8 +248,6 @@ npm install
 npm run dev
 ```
 
-Useful frontend checks:
-
 ```bash
 npm run type-check
 npm run lint
@@ -250,8 +255,11 @@ npm test
 npm run build
 ```
 
-When running the frontend outside Docker, set `NEXT_PUBLIC_API_URL` if the API
-is not available at `http://localhost:8000`.
+The web package is retained for contributors and internal deployments; it is
+not part of the released terminal workflow.
+
+The terminal tool can run directly against SQLite for local use. Use
+`./sentinel serve` only when another local service needs the FastAPI boundary.
 
 ## API at a glance
 
@@ -333,8 +341,8 @@ git push origin feat/your-change
 Before opening a pull request:
 
 1. Keep changes focused and document behavior that affects operators or users.
-2. Add or update tests for changed backend and frontend behavior.
-3. Run the relevant backend and frontend checks listed above.
+2. Add or update tests for changed backend and terminal behavior.
+3. Run the relevant checks listed above.
 4. Do not include credentials, `.env` files, databases, build output, or downloaded
    training corpora.
 5. Explain security and compatibility implications in the pull request.
@@ -343,7 +351,7 @@ Before opening a pull request:
 
 The main investigation flow is implemented, including parsing, deterministic
 analysis, persistence, timeline generation, threat scoring, optional AI
-enrichment, web visualization, CLI access, and Docker/Kubernetes deployment
+enrichment, terminal dashboards, CLI access, and Docker/Kubernetes deployment
 artifacts. See [implementation progress](docs/implementation-progress.md) for
 the current feature checklist.
 
