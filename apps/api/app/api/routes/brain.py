@@ -14,11 +14,13 @@ import logging
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.core.auth import require_api_key
+from app.core.auth import require_viewer, require_admin, AuthUser
+from app.core.config import settings
+from app.core.limiter import limiter
 from app.brain.orchestrator import Brain
 from app.brain.explainer import explain
 from app.services.email_parser.parser import parse_email
@@ -29,12 +31,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/api/v1/brain",
     tags=["brain"],
-    dependencies=[Depends(require_api_key)],
 )
 
 
 @router.get("/status")
-def get_brain_status() -> Dict[str, Any]:
+def get_brain_status(user: AuthUser = Depends(require_viewer)) -> Dict[str, Any]:
     """Return model performance metrics, ensemble weights, and threat memory stats."""
     from app import main as app_main
     from app.brain.ml.classifier import BrainClassifier
@@ -79,6 +80,7 @@ def explain_investigation(
     investigation_id: str,
     top_n: int = 10,
     db: Session = Depends(get_db),
+    user: AuthUser = Depends(require_viewer),
 ) -> Dict[str, Any]:
     """Explain why the brain gave a specific verdict to an investigation."""
     from app import main as app_main
@@ -104,7 +106,7 @@ def explain_investigation(
 
     try:
         raw_bytes = artifact_path.read_bytes()
-        parsed = parse_email(raw_bytes)
+        parsed = parse_email(raw_bytes, max_mime_depth=settings.MAX_MIME_DEPTH)
         report = explain(parsed, investigation_id=inv.id, top_n=top_n)
 
         return {
@@ -137,13 +139,18 @@ def explain_investigation(
             ],
             "raw_proba": report.raw_proba,
         }
-    except Exception as e:
-        logger.exception("Failed to explain investigation %s: %s", investigation_id, e)
-        raise HTTPException(status_code=500, detail=f"Explanation failed: {e}")
+    except Exception:
+        logger.exception("investigation_explanation_failed investigation_id=%s", investigation_id)
+        raise HTTPException(status_code=500, detail="Unable to generate the investigation explanation")
 
 
 @router.post("/retrain")
-def trigger_retrain(background_tasks: BackgroundTasks) -> Dict[str, Any]:
+@limiter.limit(settings.RATE_LIMIT_EXPENSIVE)
+def trigger_retrain(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: AuthUser = Depends(require_admin),
+) -> Dict[str, Any]:
     """Trigger background model retraining on real + synthetic data."""
     def _do_retrain():
         try:

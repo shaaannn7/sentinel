@@ -40,7 +40,11 @@ def extract_bodies(msg: Message) -> tuple[Optional[str], Optional[str]]:
     html: Optional[str] = None
 
     if msg.is_multipart():
+        part_count = 0
         for part in msg.walk():
+            part_count += 1
+            if part_count > 500:
+                break
             if part.is_multipart():
                 continue
             if not _is_safe_payload(part):

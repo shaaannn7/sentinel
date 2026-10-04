@@ -34,12 +34,20 @@ export interface Artifact { id: string; filename: string; file_size: number; sha
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
+function getAuthHeaders(): Record<string, string> {
+  const authKey = typeof window !== 'undefined'
+    ? localStorage.getItem('sentinel_api_key') || process.env.NEXT_PUBLIC_API_KEY || ''
+    : process.env.NEXT_PUBLIC_API_KEY || '';
+  return authKey ? { 'X-API-Key': authKey } : {};
+}
+
 export async function createInvestigation(file: File): Promise<Investigation> {
   const formData = new FormData();
   formData.append('file', file);
 
   const response = await fetch(`${API_URL}/api/v1/investigations`, {
     method: 'POST',
+    headers: getAuthHeaders(),
     body: formData,
   });
 
@@ -52,7 +60,9 @@ export async function createInvestigation(file: File): Promise<Investigation> {
 }
 
 export async function getInvestigation(id: string): Promise<Investigation> {
-  const response = await fetch(`${API_URL}/api/v1/investigations/${encodeURIComponent(id)}`);
+  const response = await fetch(`${API_URL}/api/v1/investigations/${encodeURIComponent(id)}`, {
+    headers: getAuthHeaders(),
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Fetch failed' }));
@@ -63,7 +73,9 @@ export async function getInvestigation(id: string): Promise<Investigation> {
 }
 
 export async function listInvestigations(): Promise<{ total: number; items: Investigation[] }> {
-  const response = await fetch(`${API_URL}/api/v1/investigations`);
+  const response = await fetch(`${API_URL}/api/v1/investigations`, {
+    headers: getAuthHeaders(),
+  });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Fetch failed' }));
     throw new Error(error.detail || error.message || `HTTP ${response.status}`);

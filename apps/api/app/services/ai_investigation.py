@@ -32,12 +32,12 @@ def evidence_for(investigation: Investigation) -> dict[str, Any]:
         "sender": investigation.sender,
         "content": [
             {
-                "plain_text": artifact.plain_body or "",
-                "sanitized_html_text": artifact.html_body or "",
+                "plain_text": (artifact.plain_body or "")[:settings.MAX_AI_BODY_CHARS],
+                "sanitized_html_text": (artifact.html_body or "")[:settings.MAX_AI_BODY_CHARS],
             }
             for artifact in investigation.artifacts
         ],
-        "headers": [{"name": h.name, "value": h.value} for a in investigation.artifacts for h in a.headers],
+        "headers": [{"name": h.name, "value": h.value[:300]} for a in investigation.artifacts for h in a.headers[:50]],
         "indicators": [
             {
                 "id": indicator.id,

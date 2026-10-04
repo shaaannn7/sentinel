@@ -1,50 +1,104 @@
+nameOverride: ""
+fullnameOverride: ""
+
 api:
+  replicaCount: 2
   image:
     repository: sentinel/api
     tag: latest
     pullPolicy: IfNotPresent
-  replicaCount: 2
   service:
     type: ClusterIP
     port: 8000
   env:
-    DATABASE_URL: postgresql+psycopg2://sentinel@postgres:5432/sentinel
-    REDIS_URL: redis://redis:6379/0
+    DATABASE_URL: postgresql+psycopg2://sentinel:change_me_in_prod@sentinel-postgres:5432/sentinel
+    REDIS_URL: redis://sentinel-redis:6379/0
+    AUTH_ENFORCE: "true"
+    ADMIN_API_KEY: ""
+    ANALYST_API_KEY: ""
+    VIEWER_API_KEY: ""
     LLM_PROVIDER: mock
     LLM_MOCK_ENABLED: "false"
     THREAT_INTEL_PROVIDER: mock
-    DEMO_MODE: "true"
+    DEMO_MODE: "false"
     MAX_UPLOAD_SIZE: "10485760"
+    CORS_ORIGINS: "http://localhost:3000"
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1024Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop:
+        - ALL
 
 web:
+  replicaCount: 2
   image:
     repository: sentinel/web
     tag: latest
     pullPolicy: IfNotPresent
-  replicaCount: 2
   service:
     type: ClusterIP
     port: 3000
   env:
     NEXT_PUBLIC_API_URL: http://api:8000
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop:
+        - ALL
 
 postgres:
   enabled: true
   image:
     repository: postgres
     tag: 15-alpine
-  persistence:
+    pullPolicy: IfNotPresent
+  user: sentinel
+  database: sentinel
+  password: change_me_in_prod
+  storage:
     size: 10Gi
-  env:
-    POSTGRES_USER: sentinel
-    POSTGRES_DB: sentinel
-    POSTGRES_HOST_AUTH_METHOD: scram-sha-256
-    POSTGRES_PASSWORD: null
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1024Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
 
 redis:
   enabled: true
   image:
     repository: redis
     tag: 7-alpine
-  persistence:
-    size: 1Gi
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi

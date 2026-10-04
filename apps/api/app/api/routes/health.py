@@ -26,10 +26,14 @@ async def readiness_check(response: Response):
     except Exception:
         result["db"] = "unavailable"
 
-    # Redis check (best-effort — Redis is optional in Phase 0)
+    # Redis check (best-effort — with strict 2-second timeout to prevent probe hangs)
     try:
         import redis  # type: ignore
-        client = redis.from_url(settings.REDIS_URL)
+        client = redis.from_url(
+            settings.REDIS_URL,
+            socket_timeout=2.0,
+            socket_connect_timeout=2.0,
+        )
         client.ping()
         result["redis"] = "ok"
     except Exception:

@@ -35,28 +35,40 @@ def _is_private_ip(value: str) -> bool:
     return address.is_private or address.is_loopback or address.is_reserved or address.is_link_local
 
 
-def parse_email(raw_bytes: bytes) -> ParsedEmail:
+def _validate_mime_depth(msg: Message, max_depth: int) -> None:
+    """Reject pathological multipart nesting before walking the message."""
+    def depth(node: Message, current: int = 0) -> int:
+        if not node.is_multipart():
+            return current
+        return max((depth(child, current + 1) for child in node.get_payload()), default=current)
+
+    if depth(msg) > max_depth:
+        raise ValueError(f"MIME nesting exceeds the configured limit of {max_depth}")
+
+
+def parse_email(raw_bytes: bytes, max_mime_depth: int = 10) -> ParsedEmail:
     """Perform deterministic parsing of an .eml payload.
 
     Delegates to sub-modules for headers, body, URLs, and attachments.
     Ensures safe handling of untrusted input.
     """
     msg: Message = email.message_from_bytes(raw_bytes, policy=policy.default)
+    _validate_mime_depth(msg, max_mime_depth)
 
-    # 1. Extract all headers
+    # 1. Extract headers (capped to prevent memory exhaustion)
     headers = [
-        EmailHeader(name=name, value=str(value))
-        for name, value in msg.items()
+        EmailHeader(name=name, value=str(value)[:1000])
+        for name, value in list(msg.items())[:100]
     ]
 
     # 2. Extract bodies
     plain_body, html_body = extract_bodies(msg)
     html_body = sanitize_html(html_body) if html_body else None
 
-    # 3. Extract indicators from bodies
+    # 3. Extract indicators from bodies (bounded)
     header_text = "\n".join(header.value for header in headers)
     combined_text = (plain_body or "") + "\n" + strip_html(html_body or "") + "\n" + header_text
-    urls = extract_urls(combined_text)
+    urls = extract_urls(combined_text)[:200]
 
     indicators = []
     for url in urls:
@@ -64,6 +76,8 @@ def parse_email(raw_bytes: bytes) -> ParsedEmail:
 
     seen_values = {indicator.normalized_value for indicator in indicators}
     for value in _IP_RE.findall(combined_text):
+        if len(indicators) >= 500:
+            break
         try:
             ipaddress.ip_address(value)
         except ValueError:
@@ -74,6 +88,8 @@ def parse_email(raw_bytes: bytes) -> ParsedEmail:
             )
             seen_values.add(value)
     for value in _IPV6_RE.findall(combined_text):
+        if len(indicators) >= 500:
+            break
         try:
             ipaddress.ip_address(value)
         except ValueError:
@@ -83,19 +99,22 @@ def parse_email(raw_bytes: bytes) -> ParsedEmail:
                                         is_private=_is_private_ip(value)))
             seen_values.add(value)
     for value in _DOMAIN_RE.findall(combined_text):
+        if len(indicators) >= 500:
+            break
         normalized = value.lower().rstrip(".")
         if normalized not in seen_values and normalized != "localhost":
             indicators.append(Indicator(type="DOMAIN", raw_value=value, normalized_value=normalized))
             seen_values.add(normalized)
 
-    # 4. Extract attachments
-    attachments = extract_attachments(msg)
+    # 4. Extract attachments (bounded)
+    attachments = extract_attachments(msg, max_attachments=50)
     for att in attachments:
-        indicators.append(Indicator(
-            type="HASH",
-            raw_value=att.filename,
-            normalized_value=att.sha256
-        ))
+        if len(indicators) < 500:
+            indicators.append(Indicator(
+                type="HASH",
+                raw_value=att.filename,
+                normalized_value=att.sha256
+            ))
 
     # 5. Parse structured header data
     hops = parse_received_hops(headers)

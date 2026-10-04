@@ -193,7 +193,9 @@ external credentials.
 | Variable | Purpose | Local default |
 | --- | --- | --- |
 | `DATABASE_URL` | SQLAlchemy database connection | SQLite in direct local runs; PostgreSQL in Docker |
-| `REDIS_URL` | Redis connection | `redis://redis:6379/0` |
+| `POSTGRES_PASSWORD` | Docker/Kubernetes database password | set a strong secret |
+| `REDIS_PASSWORD` | Redis password used by Docker Compose | set a strong secret |
+| `REDIS_URL` | Redis connection | authenticated URL in Docker |
 | `LLM_PROVIDER` | `openai`, `anthropic`, or `mock` | `mock` |
 | `LLM_API_KEY` | Provider credential | empty |
 | `LLM_MODEL` | Model name passed to the provider | `gpt-4o-mini` |
@@ -205,6 +207,8 @@ external credentials.
 | `STORE_RAW_EMAIL` | Retain the uploaded artifact | `true` |
 | `UPLOAD_DIR` | Local artifact directory | `/tmp/sentinel/uploads` |
 | `CORS_ORIGINS` | Comma-separated allowed browser origins | `http://localhost:3000` |
+| `AUTH_ENFORCE` | Require an API key on protected routes | `false` for demo, `true` for production |
+| `ADMIN_API_KEY` / `ANALYST_API_KEY` / `VIEWER_API_KEY` | Role-based API credentials | empty in demo mode |
 
 Never commit `.env` or provider credentials. Use a secret manager for shared
 or production deployments.
@@ -345,9 +349,8 @@ the current feature checklist.
 
 ## License
 
-This repository does not currently include a `LICENSE` file. Add the license
-that matches your intended distribution and deployment model before publishing
-SENTINEL as a reusable package or commercial product.
+SENTINEL is distributed under the [MIT License](LICENSE). See
+[SECURITY.md](SECURITY.md) for the vulnerability disclosure process.
 
 ---
 

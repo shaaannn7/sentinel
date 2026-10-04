@@ -32,4 +32,5 @@ def calculate(findings: list[FindingDraft], evidence_count: int, parsed) -> Scor
                           bool(parsed.plain_body or parsed.html_body), bool(parsed.indicators), bool(parsed.attachments)]
     completeness = round(sum(completeness_parts) / len(completeness_parts) * 100, 1)
     confidence = "HIGH" if completeness >= 80 and evidence_count >= 4 else "MEDIUM" if completeness >= 40 else "LOW"
-    return ScoreResult(score, level, verdict, confidence, completeness, breakdown)
+    from app.core.config import settings
+    return ScoreResult(score, level, verdict, confidence, completeness, breakdown, score_version=settings.SCORE_VERSION)

@@ -46,6 +46,7 @@ class ScoreResult:
     confidence: str
     completeness: float
     breakdown: dict[str, float]
+    score_version: str = "2026.10"
 
 
 @dataclass

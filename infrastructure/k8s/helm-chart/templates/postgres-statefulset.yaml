@@ -28,11 +28,11 @@ spec:
               protocol: TCP
           env:
             - name: POSTGRES_USER
-              value: {{ .Values.postgres.user }}
+              value: {{ .Values.postgres.user | quote }}
             - name: POSTGRES_DB
-              value: {{ .Values.postgres.database }}
-            - name: POSTGRES_HOST_AUTH_METHOD
-              value: "trust"
+              value: {{ .Values.postgres.database | quote }}
+            - name: POSTGRES_PASSWORD
+              value: {{ .Values.postgres.password | quote }}
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
@@ -46,9 +46,7 @@ spec:
         resources:
           requests:
             storage: {{ .Values.postgres.storage.size }}
-{{- end }}
-
-{{- if .Values.postgres.enabled }}
+---
 apiVersion: v1
 kind: Service
 metadata:

@@ -20,9 +20,11 @@ Classes
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
+import secrets
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -178,12 +180,13 @@ def train(
     # Persist
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(pipe, MODEL_PATH, compress=3)
+    meta["model_sha256"] = hashlib.sha256(MODEL_PATH.read_bytes()).hexdigest()
     with open(META_PATH, "w") as f:
         json.dump(meta, f, indent=2)
 
     if verbose:
-        logger.info("brain.ml.train: accuracy=%.4f macro_f1=%.4f saved=%s",
-                    meta["accuracy"], meta["macro_f1"], MODEL_PATH)
+        logger.info("brain.ml.train: accuracy=%.4f macro_f1=%.4f saved=%s sha256=%s",
+                    meta["accuracy"], meta["macro_f1"], MODEL_PATH, meta["model_sha256"][:12])
 
     return meta
 
@@ -215,18 +218,29 @@ class BrainClassifier:
     def _load_or_train(self) -> None:
         if self._path.exists():
             try:
-                self._pipe = joblib.load(self._path)
+                # Security Check: Verify SHA-256 before untrusted deserialization
                 if META_PATH.exists():
                     with open(META_PATH) as f:
                         self._meta = json.load(f)
-                logger.info("brain.ml: loaded model from %s (acc=%.4f)",
+                    expected_hash = self._meta.get("model_sha256")
+                    if not expected_hash:
+                        raise ValueError("Model metadata does not contain an integrity hash")
+                    actual_hash = hashlib.sha256(self._path.read_bytes()).hexdigest()
+                    if not secrets.compare_digest(actual_hash, expected_hash):
+                        raise ValueError(
+                            f"Model integrity check failed: expected {expected_hash[:16]}, got {actual_hash[:16]}"
+                        )
+                else:
+                    raise ValueError("Model metadata is missing")
+                self._pipe = joblib.load(self._path)
+                logger.info("brain.ml: loaded verified model from %s (acc=%.4f)",
                             self._path, self._meta.get("accuracy", 0))
                 return
             except Exception as exc:
-                logger.warning("brain.ml: model load failed (%s) — retraining", exc)
+                logger.warning("brain.ml: model load/verification failed (%s) — retraining safely", exc)
 
-        # No model on disk — auto-train from synthetic data
-        logger.info("brain.ml: no model found — generating synthetic dataset and training...")
+        # No model on disk or verification failed — auto-train from synthetic data
+        logger.info("brain.ml: generating synthetic dataset and training...")
         from app.brain.training.data_generator import generate_dataset
         X, y = generate_dataset(n_per_class=3000)
         self._meta = train(X, y, verbose=True)

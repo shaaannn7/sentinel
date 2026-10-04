@@ -12,14 +12,21 @@ class Base(DeclarativeBase):
     pass
 
 
-connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
+is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+engine_options = {
+    "pool_pre_ping": True,
+    "echo": False,
+    "connect_args": {"check_same_thread": False} if is_sqlite else {},
+}
+if not is_sqlite:
+    engine_options.update(
+        pool_size=10,
+        max_overflow=20,
+        pool_timeout=30,
+        pool_recycle=1800,
+    )
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,
-    echo=False,
-    connect_args=connect_args,
-)
+engine = create_engine(settings.DATABASE_URL, **engine_options)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

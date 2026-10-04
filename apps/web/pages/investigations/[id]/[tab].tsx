@@ -9,6 +9,7 @@ import SeverityBadge from '../../../src/components/SeverityBadge';
 import InvestigationTable from '../../../src/components/InvestigationTable';
 import { BrainForensicCard } from '../../../src/components/BrainForensicCard';
 import { ThreatRelationshipGraph } from '../../../src/components/ThreatRelationshipGraph';
+import SafeEmailBody from '../../../src/components/SafeEmailBody';
 import { AlertCircle, RefreshCw, Loader, FileText, MapPin, Code, BarChart2, TrendingUp, Clock, Shield } from 'lucide-react';
 
 export default function TabPage() {
@@ -313,17 +314,7 @@ function EmailTab({ artifact }: EmailTabProps) {
 
       <div className="space-y-4">
         <h2 className="text-lg font-medium text-text-primary">Email Body</h2>
-        {artifact.textBody ? (
-          <div className="bg-bg-tertiary rounded p-4 font-mono text-text-secondary">
-            <pre className="whitespace-pre-wrap">{artifact.textBody}</pre>
-          </div>
-        ) : artifact.htmlBody ? (
-          <div className="bg-bg-tertiary rounded p-4">
-            <div dangerouslySetInnerHTML={{ __html: artifact.htmlBody }} />
-          </div>
-        ) : (
-          <p className="text-text-secondary">No body content available</p>
-        )}
+        <SafeEmailBody htmlBody={artifact.htmlBody} textBody={artifact.textBody} />
       </div>
     </div>
   );

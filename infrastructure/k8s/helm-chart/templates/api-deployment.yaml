@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "sentinel.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.api.replicas }}
+  replicas: {{ .Values.api.replicaCount }}
   selector:
     matchLabels:
       {{- include "sentinel.selectorLabels" . | nindent 6 }}
@@ -16,28 +16,52 @@ spec:
         {{- include "sentinel.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: api
     spec:
+      {{- with .Values.api.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: api
           image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
           imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          {{- with .Values.api.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - name: http
-              containerPort: 8000
+              containerPort: {{ .Values.api.service.port }}
               protocol: TCP
           env:
             - name: DATABASE_URL
-              value: {{ .Values.api.databaseUrl }}
+              value: {{ .Values.api.env.DATABASE_URL | quote }}
             - name: REDIS_URL
-              value: {{ .Values.api.redisUrl }}
+              value: {{ .Values.api.env.REDIS_URL | quote }}
+            - name: AUTH_ENFORCE
+              value: {{ .Values.api.env.AUTH_ENFORCE | quote }}
+            - name: ADMIN_API_KEY
+              value: {{ .Values.api.env.ADMIN_API_KEY | quote }}
+            - name: ANALYST_API_KEY
+              value: {{ .Values.api.env.ANALYST_API_KEY | quote }}
+            - name: VIEWER_API_KEY
+              value: {{ .Values.api.env.VIEWER_API_KEY | quote }}
             - name: LLM_PROVIDER
-              value: {{ .Values.api.llmProvider }}
+              value: {{ .Values.api.env.LLM_PROVIDER | quote }}
+            - name: LLM_MOCK_ENABLED
+              value: {{ .Values.api.env.LLM_MOCK_ENABLED | quote }}
+            - name: THREAT_INTEL_PROVIDER
+              value: {{ .Values.api.env.THREAT_INTEL_PROVIDER | quote }}
+            - name: DEMO_MODE
+              value: {{ .Values.api.env.DEMO_MODE | quote }}
+            - name: MAX_UPLOAD_SIZE
+              value: {{ .Values.api.env.MAX_UPLOAD_SIZE | quote }}
             - name: CORS_ORIGINS
-              value: {{ .Values.api.corsOrigins }}
+              value: {{ .Values.api.env.CORS_ORIGINS | quote }}
           livenessProbe:
             httpGet:
               path: /health
               port: http
-            initialDelaySeconds: 5
+            initialDelaySeconds: 10
             periodSeconds: 10
           readinessProbe:
             httpGet:

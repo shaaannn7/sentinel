@@ -61,20 +61,32 @@ def _extension(name: str) -> str:
     return ext.lstrip(".").lower()
 
 
-def extract_attachments(msg: Message) -> list[Attachment]:
-    """Walk the message and extract attachment metadata.
+def extract_attachments(msg: Message, max_attachments: int = 50, max_payload_bytes: int = 25 * 1024 * 1024) -> list[Attachment]:
+    """Walk the message and extract attachment metadata safely with bounds.
 
     Attachments are NEVER executed. We only compute metadata (size, hash, magic).
     """
-    out = []
+    out: list[Attachment] = []
+    part_count = 0
     for part in msg.walk():
+        part_count += 1
+        if part_count > 1000 or len(out) >= max_attachments:
+            break
         if part.is_multipart():
             continue
         disposition = (part.get("Content-Disposition") or "").lower()
         filename = part.get_filename()
         # Treat as attachment if disposition explicitly says so OR filename is present and not text/*
         if "attachment" in disposition or (filename and part.get_content_maintype() != "text"):
-            payload = part.get_payload(decode=True) or b""
+            try:
+                payload = part.get_payload(decode=True) or b""
+            except Exception:
+                payload = b""
+
+            if len(payload) > max_payload_bytes:
+                # Truncate payload for hashing to avoid memory exhaustion
+                payload = payload[:max_payload_bytes]
+
             if not filename:
                 filename = "part.bin"
             safe_name = _safe_filename(filename)
@@ -85,7 +97,7 @@ def extract_attachments(msg: Message) -> list[Attachment]:
 
             out.append(Attachment(
                 filename=safe_name,
-                mime_type=part.get_content_type(),
+                mime_type=part.get_content_type() or "application/octet-stream",
                 size=len(payload),
                 sha256=sha256,
                 extension=ext or None,

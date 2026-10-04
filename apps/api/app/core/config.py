@@ -27,6 +27,23 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "/tmp/sentinel/uploads"
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
     API_AUTH_KEY: str = ""
+    ADMIN_API_KEY: str = ""
+    ANALYST_API_KEY: str = ""
+    VIEWER_API_KEY: str = ""
+    AUTH_ENFORCE: bool = False
+
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_DEFAULT: str = "120/minute"
+    RATE_LIMIT_UPLOAD: str = "15/minute"
+    RATE_LIMIT_EXPENSIVE: str = "6/minute"
+
+    MAX_ATTACHMENTS: int = 50
+    MAX_URLS: int = 200
+    MAX_INDICATORS: int = 500
+    MAX_MIME_DEPTH: int = 10
+    MAX_HEADER_COUNT: int = 100
+    MAX_AI_BODY_CHARS: int = 4000
+    SCORE_VERSION: str = "2026.10"
 
     model_config = SettingsConfigDict(
         env_file=".env",

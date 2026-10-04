@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "sentinel.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.web.replicas }}
+  replicas: {{ .Values.web.replicaCount }}
   selector:
     matchLabels:
       {{- include "sentinel.selectorLabels" . | nindent 6 }}
@@ -16,22 +16,30 @@ spec:
         {{- include "sentinel.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: web
     spec:
+      {{- with .Values.web.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: web
           image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag }}"
           imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+          {{- with .Values.web.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - name: http
-              containerPort: 3000
+              containerPort: {{ .Values.web.service.port }}
               protocol: TCP
           env:
             - name: NEXT_PUBLIC_API_URL
-              value: {{ .Values.web.apiUrl }}
+              value: {{ .Values.web.env.NEXT_PUBLIC_API_URL | quote }}
           livenessProbe:
             httpGet:
               path: /
               port: http
-            initialDelaySeconds: 10
+            initialDelaySeconds: 15
             periodSeconds: 10
           readinessProbe:
             httpGet:

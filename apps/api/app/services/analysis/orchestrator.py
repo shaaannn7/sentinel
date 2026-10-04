@@ -142,5 +142,6 @@ def _persist(db: Session, investigation_id: str, evidence_items, findings, timel
                 f"{len(findings)} evidence-backed finding(s); evidence completeness {score.completeness:.0f}%."
             )
         investigation.score_breakdown   = score.breakdown
+        investigation.score_version     = getattr(score, "score_version", "2026.10")
         investigation.analysis_warnings = warnings
     db.flush()

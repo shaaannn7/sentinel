@@ -24,31 +24,50 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
+  const authKey = typeof window !== 'undefined'
+    ? localStorage.getItem('sentinel_api_key') || process.env.NEXT_PUBLIC_API_KEY || ''
+    : process.env.NEXT_PUBLIC_API_KEY || '';
+
+  const authHeaders: Record<string, string> = {};
+  if (authKey) {
+    authHeaders['X-API-Key'] = authKey;
+  }
+
+  // 30-second client timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
   const config: RequestInit = {
+    signal: options.signal || controller.signal,
     headers: {
       ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+      ...authHeaders,
       ...options.headers,
     },
     ...options,
   };
 
-  const response = await fetch(url, config);
+  try {
+    const response = await fetch(url, config);
 
-  if (!response.ok) {
-    let errorBody: unknown;
-    try {
-      errorBody = await response.json();
-    } catch {
-      errorBody = await response.text();
+    if (!response.ok) {
+      let errorBody: unknown;
+      try {
+        errorBody = await response.json();
+      } catch {
+        errorBody = await response.text();
+      }
+      throw new ApiError(
+        `API error: ${response.statusText}`,
+        response.status,
+        errorBody
+      );
     }
-    throw new ApiError(
-      `API error: ${response.statusText}`,
-      response.status,
-      errorBody
-    );
-  }
 
-  return response.json();
+    return response.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function normalizeInvestigationDetail(raw: any): InvestigationDetail {
@@ -175,6 +194,28 @@ export const api = {
         status: res.status,
         message: 'Investigation created successfully',
       };
+    },
+
+    report: async (id: string, format: 'json' | 'html' = 'json'): Promise<any> => {
+      return request<any>(`/api/v1/investigations/${encodeURIComponent(id)}/report?format=${format}`);
+    },
+
+    analyze: async (id: string): Promise<any> => {
+      return request<any>(`/api/v1/investigations/${encodeURIComponent(id)}/analyze`, {
+        method: 'POST',
+      });
+    },
+
+    aiAnalysis: async (id: string): Promise<any> => {
+      return request<any>(`/api/v1/investigations/${encodeURIComponent(id)}/ai-analysis`, {
+        method: 'POST',
+      });
+    },
+
+    enrich: async (id: string): Promise<any> => {
+      return request<any>(`/api/v1/investigations/${encodeURIComponent(id)}/enrich`, {
+        method: 'POST',
+      });
     },
   },
 

@@ -24,6 +24,7 @@ class Investigation(Base):
     confidence_level: Mapped[str] = mapped_column(String(16), default="LOW", nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=True)
     score_breakdown: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    score_version: Mapped[str] = mapped_column(String(32), default="2026.10", nullable=False)
     analysis_warnings: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False

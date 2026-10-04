@@ -5,10 +5,16 @@ services:
       dockerfile: Dockerfile
     container_name: sentinel-api
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
+    security_opt:
+      - no-new-privileges:true
     environment:
-      DATABASE_URL: postgresql+psycopg2://sentinel@postgres:5432/sentinel
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+psycopg2://sentinel:${POSTGRES_PASSWORD:-sentinel_secure_pass_2026}@postgres:5432/sentinel
+      REDIS_URL: redis://:${REDIS_PASSWORD:-sentinel_redis_pass_2026}@redis:6379/0
+      AUTH_ENFORCE: ${AUTH_ENFORCE:-false}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+      ANALYST_API_KEY: ${ANALYST_API_KEY:-}
+      VIEWER_API_KEY: ${VIEWER_API_KEY:-}
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MOCK_ENABLED: ${LLM_MOCK_ENABLED:-false}
@@ -30,6 +36,11 @@ services:
       retries: 3
     networks:
       - sentinel-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
 
   web:
     build:
@@ -37,7 +48,9 @@ services:
       dockerfile: Dockerfile
     container_name: sentinel-web
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
+    security_opt:
+      - no-new-privileges:true
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
     depends_on:
@@ -45,38 +58,58 @@ services:
         condition: service_healthy
     networks:
       - sentinel-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
 
   postgres:
     image: postgres:15-alpine
     container_name: sentinel-postgres
+    security_opt:
+      - no-new-privileges:true
     environment:
       POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentinel_secure_pass_2026}
       POSTGRES_DB: sentinel
-      POSTGRES_HOST_AUTH_METHOD: trust
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sentinel"]
+      test: ["CMD-SHELL", "pg_isready -U sentinel -d sentinel"]
       interval: 10s
       timeout: 5s
       retries: 3
     networks:
       - sentinel-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
 
   redis:
     image: redis:7-alpine
     container_name: sentinel-redis
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-sentinel_redis_pass_2026}"]
+    security_opt:
+      - no-new-privileges:true
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-sentinel_redis_pass_2026}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
     networks:
       - sentinel-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
 volumes:
   postgres_data:
