@@ -1,0 +1,14 @@
+apiVersion: v2
+name: sentinel
+description: AI-Powered Email Threat Detection, Geolocation and Forensic Intelligence Platform
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - security
+  - email
+  - threat-detection
+  - ai
+maintainers:
+  - name: SENTINEL Team
+    email: dev@sentinel.local

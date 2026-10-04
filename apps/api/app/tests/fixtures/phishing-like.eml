@@ -1,0 +1,9 @@
+From: notice@paypa1-example.test
+To: analyst@example.net
+Subject: Urgent verification
+Authentication-Results: mx.example; spf=fail dkim=fail dmarc=fail
+Date: Tue, 01 Jan 2024 00:00:00 +0000
+Content-Type: text/plain; charset=utf-8
+
+URGENT: verify your password immediately. Your account will be suspended within 24 hours.
+Visit https://paypa1-example.test/login

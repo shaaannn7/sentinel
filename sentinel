@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# SENTINEL launcher.
+#
+# Supported entry points:
+#   ./sentinel cli <command>   Run the terminal interface explicitly.
+#   ./sentinel gui             Start the API and browser interface.
+#   ./sentinel <command>       Backwards-compatible CLI invocation.
+
+set -euo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+CLI=(env PYTHONPATH="$DIR/apps/api" python3 "$DIR/apps/api/cli.py")
+
+run_cli() {
+  exec "${CLI[@]}" "$@"
+}
+
+run_gui() {
+  local api_pid=""
+  local web_pid=""
+  local api_started=0
+
+  cleanup() {
+    if [[ -n "$web_pid" ]] && kill -0 "$web_pid" 2>/dev/null; then
+      kill "$web_pid" 2>/dev/null || true
+    fi
+    if [[ "$api_started" -eq 1 ]] && [[ -n "$api_pid" ]] && kill -0 "$api_pid" 2>/dev/null; then
+      kill "$api_pid" 2>/dev/null || true
+    fi
+  }
+  trap cleanup EXIT INT TERM
+
+  if ! curl --silent --fail --max-time 1 http://127.0.0.1:8000/health >/dev/null 2>&1; then
+    echo "Starting SENTINEL API on http://127.0.0.1:8000" >&2
+    "${CLI[@]}" serve --host 127.0.0.1 --port 8000 >/tmp/sentinel-api.log 2>&1 &
+    api_pid=$!
+    api_started=1
+
+    for _ in {1..30}; do
+      if curl --silent --fail --max-time 1 http://127.0.0.1:8000/health >/dev/null 2>&1; then
+        break
+      fi
+      if ! kill -0 "$api_pid" 2>/dev/null; then
+        echo "SENTINEL API failed to start. See /tmp/sentinel-api.log." >&2
+        return 1
+      fi
+      sleep 1
+    done
+  else
+    echo "Using the existing SENTINEL API on http://127.0.0.1:8000" >&2
+  fi
+
+  if [[ ! -d "$DIR/apps/web/node_modules" ]]; then
+    echo "Web dependencies are missing. Run: npm --prefix apps/web install" >&2
+    return 1
+  fi
+
+  echo "Starting SENTINEL GUI on http://127.0.0.1:3000" >&2
+  npm --prefix "$DIR/apps/web" run dev -- --hostname 127.0.0.1 &
+  web_pid=$!
+
+  if command -v xdg-open >/dev/null 2>&1; then
+    sleep 2
+    xdg-open http://127.0.0.1:3000 >/dev/null 2>&1 || true
+  fi
+
+  wait "$web_pid"
+}
+
+case "${1:-}" in
+  cli)
+    shift
+    run_cli "$@"
+    ;;
+  gui|web)
+    shift
+    if [[ $# -gt 0 ]]; then
+      echo '{"error":true,"code":"INVALID_ARGUMENT","message":"The gui command does not accept positional arguments.","suggestion":"Run ./sentinel gui without arguments."}' >&2
+      exit 2
+    fi
+    run_gui
+    ;;
+  help|--help|-h)
+    cat <<'EOF'
+SENTINEL — Email Threat Detection & Forensic Intelligence
+
+Choose an interface:
+  ./sentinel gui             Start the browser GUI and API
+  ./sentinel cli <command>   Use the terminal CLI explicitly
+  ./sentinel <command>       Backwards-compatible CLI invocation
+
+Examples:
+  ./sentinel gui
+  ./sentinel cli analyze path/to/message.eml
+  ./sentinel list
+EOF
+    ;;
+  *)
+    run_cli "$@"
+    ;;
+esac

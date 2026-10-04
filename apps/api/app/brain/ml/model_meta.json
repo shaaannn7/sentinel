@@ -1,0 +1,63 @@
+{
+  "trained_at": "2026-09-12T08:17:06Z",
+  "n_train": 7645,
+  "n_test": 1350,
+  "n_features": 80,
+  "classes": {
+    "0": "BENIGN",
+    "1": "SUSPICIOUS",
+    "2": "PHISHING",
+    "3": "MALICIOUS"
+  },
+  "accuracy": 0.9940740740740741,
+  "macro_f1": 0.9915821136751369,
+  "confusion_matrix": [
+    [
+      598,
+      3,
+      0,
+      0
+    ],
+    [
+      5,
+      144,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      300,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      300
+    ]
+  ],
+  "per_class": {
+    "BENIGN": {
+      "precision": 0.9917081260364843,
+      "recall": 0.9950083194675541,
+      "f1": 0.9933554817275747
+    },
+    "SUSPICIOUS": {
+      "precision": 0.9795918367346939,
+      "recall": 0.9664429530201343,
+      "f1": 0.972972972972973
+    },
+    "PHISHING": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "MALICIOUS": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    }
+  },
+  "train_time_seconds": 77.65
+}

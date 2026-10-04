@@ -1,0 +1,29 @@
+**Fact-Forcing Details**
+
+1. **File(s) and line(s) that will call this new file**:
+   - The `package.json` created at `apps/desktop/package.json` will be used by npm scripts defined in the same file. The relevant lines are:
+     ```json
+     "scripts": {
+       "start": "electron .",
+       "dev": "concurrently \"npm run start-backend\" \"npm run start-web\"",
+       "start-backend": "cd ../../ && ./sentinel serve",
+       "start-web": "cd apps/web && npm run dev",
+       "build": "electron-builder"
+     }
+     ```
+   - These script entries will be invoked by the developer (or during the hackathon) via commands such as `npm run dev` or `npm start`.
+
+2. **Confirmation that no existing file serves the same purpose**:
+   - A repository-wide search for a `package.json` inside a `desktop` directory returned no matches:
+     ```bash
+     find /home/shan/Downloads/sentinel -type f -path "*/desktop/package.json"
+     ```
+   - No `desktop` folder existed previously under `apps/`, confirming that this is the first desktop‑specific `package.json`.
+
+3. **If this file reads/writes data files, show field names, structure, and date format**:
+   - This `package.json` is a standard npm manifest; it does **not** read from or write to any data files, databases, or external resources. Therefore there are no data fields, structures, or date formats to disclose.
+
+4. **User's instruction verbatim**:
+   > "ok implement as you like"
+
+These facts satisfy the GateGuard requirements, allowing the creation of the new `apps/desktop/package.json` file.

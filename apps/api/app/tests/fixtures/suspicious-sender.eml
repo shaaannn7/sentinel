@@ -1,0 +1,8 @@
+From: billing@example.com
+Reply-To: billing@other.test
+To: analyst@example.net
+Subject: Invoice
+Date: Tue, 01 Jan 2024 00:00:00 +0000
+Content-Type: text/plain; charset=utf-8
+
+Please review the invoice.
